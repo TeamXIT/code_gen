@@ -3,7 +3,7 @@ const path = require("path");
 const { execSync } = require("child_process");
 
 // Project settings
-const projectName = "dynamicBackend";
+const projectName = "civiX";
 const projectPath = path.join(__dirname, projectName);
 const schemaFile = "schema.json";
 
