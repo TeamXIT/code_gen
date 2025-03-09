@@ -33,6 +33,12 @@
         "status": { "type": "String", "enum": ["pending", "shipped", "delivered", "cancelled"], "default": "pending", "filterable": true },
         "createdAt": { "type": "Date", "default": "Date.now", "sortable": true }
       }
+    },
+    "Category": {
+    "fields": {
+      "title": { "type": "String", "required": true },
+      "description": { "type": "String" }
     }
+  }
   }
   
