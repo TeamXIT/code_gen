@@ -1,11 +1,34 @@
+#!/usr/bin/env node
+
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
 
-// Project settings
-const projectName = "civiX";
-const projectPath = path.join(__dirname, projectName);
-const schemaFile = "schema.json";
+// Get CLI arguments
+const args = process.argv.slice(2);
+if (args.length < 2) {
+  console.error("❌ Usage: backend-generator <projectName> <schemaFilePath>");
+  process.exit(1);
+}
+
+const [projectName, schemaPath] = args;
+const projectPath = path.join(process.cwd(), projectName);
+
+// Ensure schema.json exists
+if (!fs.existsSync(schemaPath)) {
+  console.error("❌ Schema file not found:", schemaPath);
+  process.exit(1);
+}
+
+// Read schema.json
+let schema;
+try {
+  schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
+  console.log("✅ Loaded schema.json successfully");
+} catch (error) {
+  console.error("❌ Error parsing schema.json:", error.message);
+  process.exit(1);
+}
 
 // Ensure project directory exists
 if (!fs.existsSync(projectPath)) fs.mkdirSync(projectPath, { recursive: true });
@@ -14,9 +37,9 @@ if (!fs.existsSync(projectPath)) fs.mkdirSync(projectPath, { recursive: true });
 const dependencies = ["express", "mongoose", "cors", "dotenv", "body-parser"];
 const devDependencies = ["nodemon"];
 
-// Step 1: Create package.json
+// Create package.json
 const packageJson = {
-  name: projectName,
+  name: projectName.toLowerCase(),
   version: "1.0.0",
   description: "Generated Node.js Backend",
   main: "server.js",
@@ -30,20 +53,20 @@ fs.writeFileSync(
   path.join(projectPath, "package.json"),
   JSON.stringify(packageJson, null, 2)
 );
-console.log("✅ package.json created");
+console.log("✅ Created package.json");
 
-// Step 2: Install dependencies
+// Install dependencies
 try {
   console.log("📦 Installing dependencies...");
-  process.chdir(projectPath); // Fix: Change directory properly
+  process.chdir(projectPath);
   execSync(`npm install ${dependencies.join(" ")}`);
   execSync(`npm install --save-dev ${devDependencies.join(" ")}`);
-  console.log("✅ Dependencies installed");
+  console.log("✅ Installed dependencies");
 } catch (error) {
   console.error("❌ Error installing dependencies:", error.message);
 }
 
-// Step 3: Create `server.js`
+// Create `server.js`
 const serverJsContent = `
 require("dotenv").config();
 const express = require("express");
@@ -51,7 +74,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const fs = require("fs");
-const path = require("path"); // Fix: Ensure path is included
+const path = require("path");
 
 const app = express();
 app.use(cors());
@@ -64,6 +87,7 @@ mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log("✅ MongoDB Connected"))
   .catch(err => console.error("❌ MongoDB Connection Error:", err));
 
+// Load routes dynamically
 const routesPath = path.join(__dirname, "routes");
 if (fs.existsSync(routesPath)) {
   fs.readdirSync(routesPath).forEach(file => {
@@ -81,30 +105,20 @@ app.listen(PORT, () => console.log(\`🚀 Server running on port \${PORT}\`));
 `.trim();
 
 fs.writeFileSync(path.join(projectPath, "server.js"), serverJsContent);
-console.log("✅ server.js created");
+console.log("✅ Created server.js");
 
-// Step 4: Create .env file
+// Create `.env`
 fs.writeFileSync(path.join(projectPath, ".env"), `MONGO_URI=mongodb://localhost:27017/${projectName}`);
-console.log("✅ .env file created");
+console.log("✅ Created .env");
 
-// Step 5: Create directories
+// Create directories
 const directories = ["models", "routes", "controllers"];
 directories.forEach((dir) => {
-  fs.mkdirSync(path.join(projectPath, dir), { recursive: true }); // Fix: Use { recursive: true }
+  fs.mkdirSync(path.join(projectPath, dir), { recursive: true });
 });
-console.log("✅ Base directories created");
+console.log("✅ Created project structure");
 
-// Step 6: Read schema.json
-let schema;
-try {
-  schema = JSON.parse(fs.readFileSync(path.join(__dirname, schemaFile), "utf8").trim()); // Fix: Ensure correct schema path
-  console.log("✅ schema.json loaded successfully");
-} catch (error) {
-  console.error("❌ Error parsing schema.json:", error.message);
-  process.exit(1);
-}
-
-// Step 7: Generate CRUD files
+// Generate Models, Controllers, and Routes
 Object.keys(schema).forEach((modelName) => {
   const fields = schema[modelName]?.fields;
   if (!fields) {
@@ -134,7 +148,7 @@ module.exports = mongoose.model("${modelName}", ${modelName}Schema);
   `.trim();
 
   fs.writeFileSync(path.join(projectPath, "models", `${modelName}.js`), modelContent);
-  console.log(`✅ Model created: ${modelName}.js`);
+  console.log(`✅ Created model: ${modelName}.js`);
 
   // Generate Controller
   const controllerContent = `
@@ -144,7 +158,26 @@ exports.create = async (req, res) => {
   try { res.status(201).json(await new ${modelName}(req.body).save()); }
   catch (error) { res.status(400).json({ error: error.message }); }
 };
-
+exports.getAll = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search, filter } = req.query;
+    let query = {};
+    if (search) {
+      query.$or = Object.keys(${modelName}.schema.paths)
+        .filter((key) => ${modelName}.schema.paths[key].instance === "String")
+        .map((key) => ({ [key]: new RegExp(search, "i") }));
+    }
+    if (filter) {
+      Object.assign(query, JSON.parse(filter));
+    }
+    const data = await ${modelName}.find(query)
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit));
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 exports.findAll = async (req, res) => {
   try { res.json(await ${modelName}.find()); }
   catch (error) { res.status(500).json({ error: error.message }); }
@@ -167,25 +200,31 @@ exports.delete = async (req, res) => {
   `.trim();
 
   fs.writeFileSync(path.join(projectPath, "controllers", `${modelName}Controller.js`), controllerContent);
-  console.log(`✅ Controller created: ${modelName}Controller.js`);
+  console.log(`✅ Created controller: ${modelName}Controller.js`);
 
   // Generate Routes
   const routeContent = `
 const express = require("express");
 const router = express.Router();
-const controller = require("../controllers/${modelName}Controller");
+const ${modelName}Controller = require("../controllers/${modelName}Controller");
 
-router.post("/", controller.create);
-router.get("/", controller.findAll);
-router.get("/:id", controller.findById);
-router.put("/:id", controller.update);
-router.delete("/:id", controller.delete);
+router.post("/", ${modelName}Controller.create);
+router.get("/", ${modelName}Controller.findAll);
+router.get("/getAll", ${modelName}Controller.getAll);
+router.get("/:id", ${modelName}Controller.findById);
+router.put("/:id", ${modelName}Controller.update);
+router.delete("/:id", ${modelName}Controller.delete);
 
 module.exports = router;
   `.trim();
 
-  fs.writeFileSync(path.join(projectPath, "routes", `${modelName}Routes.js`), routeContent);
-  console.log(`✅ Routes created: ${modelName}Routes.js`);
+  fs.writeFileSync(
+    path.join(projectPath, "routes", `${modelName}Routes.js`),
+    routeContent
+  );
+  console.log(`✅ Created route: ${modelName}Routes.js`);
 });
 
-console.log("🔥 Setup complete! Run `cd dynamicBackend && npm run dev` to start the server.");
+console.log("🔥 Backend setup complete! Run:");
+console.log(`   cd ${projectName}`);
+console.log("   npm run dev");

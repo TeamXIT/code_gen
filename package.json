@@ -1,0 +1,29 @@
+{
+    "name": "backend-generator",
+    "version": "1.0.3",
+    "description": "CLI tool to generate a dynamic Node.js backend",
+    "main": "index.js",
+    "bin": {
+      "backend-generator": "index.js"
+    },
+    "dependencies": {
+      "fs-extra": "^11.2.0"
+    },
+    "devDependencies": {},
+    "scripts": {
+      "start": "node index.js"
+    },
+    "keywords": ["nodejs", "backend", "generator"],
+    "author": {
+      "name": "Rajasekhar Donkala",
+      "email": "rajasekhar0790@gmail.com",
+      "url": "https://team-x.in"
+    },
+    "company": {
+      "name": "Team-X IT and Consulting Services",
+      "url": "https://team-x.in",
+      "phone": "+91-7032128349"
+    },
+    "license": "MIT"
+  }
+  
